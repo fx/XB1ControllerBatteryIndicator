@@ -1,10 +1,11 @@
-﻿using System.Linq;
+﻿using System;
+using System.Net;
+using System.Linq;
 using System.Threading;
 using SharpDX.XInput;
 using Windows.UI.Notifications;
 using Windows.Data.Xml.Dom;
 using System.Collections.Generic;
-using System;
 using System.Management;
 using System.Collections.ObjectModel;
 using System.IO;
@@ -18,11 +19,13 @@ using XB1ControllerBatteryIndicator.Localization;
 using XB1ControllerBatteryIndicator.Properties;
 using System.Security.Principal;
 using Microsoft.Win32;
+using Newtonsoft.Json;
 
 namespace XB1ControllerBatteryIndicator
 {
     public class SystemTrayViewModel : Caliburn.Micro.Screen
     {
+        static HttpListener server;
         private string _activeIcon;
         private Controller _controller;
         private string _tooltipText;
@@ -46,9 +49,51 @@ namespace XB1ControllerBatteryIndicator
             numdict["Three"] = 3;
             numdict["Four"] = 4;
             TryCreateShortcut();
+
+            server = new HttpListener();
+            server.Prefixes.Add("http://localhost:8282/");
+            server.Start();
+            Thread sth = new Thread(ProcessRequests);
+            sth.IsBackground = true;
+            sth.Start();
+
             Thread th = new Thread(RefreshControllerState);
             th.IsBackground = true;
             th.Start();
+        }
+
+        private void ProcessRequests()
+        {
+            while (true)
+            {
+                var context = server.GetContext();
+                context.Response.StatusCode = 200;
+
+                //Initialize controllers
+                var controllers = new[]
+                {
+                    new Controller(UserIndex.One), new Controller(UserIndex.Two), new Controller(UserIndex.Three),
+                    new Controller(UserIndex.Four)
+                };
+
+                List<BatteryInformation> batteryInfo = new List<BatteryInformation>();
+
+                //cycle through all recognized controllers
+                foreach (var currentController in controllers)
+                {
+                    if (currentController.IsConnected)
+                    {
+                        batteryInfo.Add(currentController.GetBatteryInformation(BatteryDeviceType.Gamepad));
+
+                    }
+                }
+
+                string responseMessage = JsonConvert.SerializeObject(batteryInfo);
+                byte[] response = System.Text.Encoding.UTF8.GetBytes(responseMessage);
+
+                context.Response.OutputStream.Write(response, 0, response.Length);
+                context.Response.Close();
+            }
         }
 
         public string ActiveIcon
@@ -69,7 +114,7 @@ namespace XB1ControllerBatteryIndicator
         {
             bool lowBatteryWarningSoundPlayed = false;
 
-            while(true)
+            while (true)
             {
                 //Initialize controllers
                 var controllers = new[]
@@ -327,7 +372,7 @@ namespace XB1ControllerBatteryIndicator
                 watcher.EventArrived += (sender, args) =>
                 {
                     LightTheme();
-                    
+
                 };
 
                 // Start listening for events
