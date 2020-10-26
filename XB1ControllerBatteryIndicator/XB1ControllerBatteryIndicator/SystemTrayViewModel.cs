@@ -67,7 +67,17 @@ namespace XB1ControllerBatteryIndicator
             while (true)
             {
                 var context = server.GetContext();
-                context.Response.StatusCode = 200;
+                HttpListenerRequest request = context.Request;
+                HttpListenerResponse response = context.Response;
+                response.StatusCode = 200;
+
+                if (request.HttpMethod == "OPTIONS")
+                {
+                    response.AddHeader("Access-Control-Allow-Headers", "Content-Type, Accept, X-Requested-With");
+                    response.AddHeader("Access-Control-Allow-Methods", "GET, POST");
+                    response.AddHeader("Access-Control-Max-Age", "1728000");
+                }
+                response.AppendHeader("Access-Control-Allow-Origin", "*");
 
                 //Initialize controllers
                 var controllers = new[]
@@ -89,10 +99,10 @@ namespace XB1ControllerBatteryIndicator
                 }
 
                 string responseMessage = JsonConvert.SerializeObject(batteryInfo);
-                byte[] response = System.Text.Encoding.UTF8.GetBytes(responseMessage);
+                byte[] responseString = System.Text.Encoding.UTF8.GetBytes(responseMessage);
 
-                context.Response.OutputStream.Write(response, 0, response.Length);
-                context.Response.Close();
+                response.OutputStream.Write(responseString, 0, responseString.Length);
+                response.Close();
             }
         }
 
